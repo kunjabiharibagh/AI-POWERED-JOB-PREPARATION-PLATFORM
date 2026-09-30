@@ -3,21 +3,57 @@ import "../style/home.scss"
 import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate } from 'react-router'
 
+const MAX_FILE_SIZE = 3 * 1024 * 1024 // 3MB, matches the backend multer limit
+
 const Home = () => {
 
-    const { loading, generateReport,reports } = useInterview()
+    const { loading, generateReport, reports } = useInterview()
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
+    const [ resumeFileName, setResumeFileName ] = useState(null)
+    const [ error, setError ] = useState("")
     const resumeInputRef = useRef()
-    // After line: const resumeInputRef = useRef()
-    const [resumeFileName, setResumeFileName] = useState(null)
 
     const navigate = useNavigate()
 
     const handleGenerateReport = async () => {
-        const resumeFile = resumeInputRef.current.files[ 0 ]
-        const data = await generateReport({ jobDescription, selfDescription, resumeFile })
-        navigate(`/interview/${data._id}`)
+        setError("")
+
+        const resumeFile = resumeInputRef.current?.files[ 0 ]
+
+        if (!jobDescription.trim()) {
+            setError("Please paste the target job description.")
+            return
+        }
+
+        if (!resumeFile && !selfDescription.trim()) {
+            setError("Please upload a resume or write a quick self-description.")
+            return
+        }
+
+        if (resumeFile && resumeFile.size > MAX_FILE_SIZE) {
+            setError("Resume file is too large. Maximum size is 3MB.")
+            return
+        }
+
+        try {
+            const data = await generateReport({ jobDescription, selfDescription, resumeFile })
+
+            if (data?._id) {
+                navigate(`/interview/${data._id}`)
+            } else {
+                setError("Could not generate the interview plan. Please try again.")
+            }
+        } catch (err) {
+            console.log(err)
+            setError("Something went wrong while generating your plan. Please try again.")
+        }
+    }
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[ 0 ]
+        setResumeFileName(file?.name || null)
+        setError("")
     }
 
     if (loading) {
@@ -51,12 +87,13 @@ const Home = () => {
                             <span className='badge badge--required'>Required</span>
                         </div>
                         <textarea
+                            value={jobDescription}
                             onChange={(e) => { setJobDescription(e.target.value) }}
                             className='panel__textarea'
                             placeholder={`Paste the full job description here...\ne.g. 'Senior Frontend Engineer at Google requires proficiency in React, TypeScript, and large-scale system design...'`}
                             maxLength={5000}
                         />
-                        <div className='char-counter'>0 / 5000 chars</div>
+                        <div className='char-counter'>{jobDescription.length} / 5000 chars</div>
                     </div>
 
                     {/* Vertical Divider */}
@@ -73,25 +110,27 @@ const Home = () => {
 
                         {/* Upload Resume */}
                         <label className='dropzone' htmlFor='resume'>
-    <span className='dropzone__icon'>...</span>
-    {resumeFileName ? (
-        <p className='dropzone__title' style={{ color: '#4ade80' }}>✓ {resumeFileName}</p>
-    ) : (
-        <>
-            <p className='dropzone__title'>Click to upload or drag &amp; drop</p>
-            <p className='dropzone__subtitle'>PDF or DOCX (Max 5MB)</p>
-        </>
-    )}
-    <input
-        ref={resumeInputRef}
-        hidden
-        type='file'
-        id='resume'
-        name='resume'
-        accept='.pdf,.docx'
-        onChange={(e) => setResumeFileName(e.target.files[0]?.name || null)}
-    />
-</label>
+                            <span className='dropzone__icon'>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                            </span>
+                            {resumeFileName ? (
+                                <p className='dropzone__title' style={{ color: '#4ade80' }}>✓ {resumeFileName}</p>
+                            ) : (
+                                <>
+                                    <p className='dropzone__title'>Click to upload or drag &amp; drop</p>
+                                    <p className='dropzone__subtitle'>PDF only (Max 3MB)</p>
+                                </>
+                            )}
+                            <input
+                                ref={resumeInputRef}
+                                hidden
+                                type='file'
+                                id='resume'
+                                name='resume'
+                                accept='.pdf'
+                                onChange={handleFileChange}
+                            />
+                        </label>
 
                         {/* OR Divider */}
                         <div className='or-divider'><span>OR</span></div>
@@ -100,6 +139,7 @@ const Home = () => {
                         <div className='self-description'>
                             <label className='section-label' htmlFor='selfDescription'>Quick Self-Description</label>
                             <textarea
+                                value={selfDescription}
                                 onChange={(e) => { setSelfDescription(e.target.value) }}
                                 id='selfDescription'
                                 name='selfDescription'
@@ -128,10 +168,14 @@ const Home = () => {
                         Generate My Interview Strategy
                     </button>
                 </div>
+
+                {error && (
+                    <p style={{ color: '#f87171', padding: '0 1.5rem 1.25rem', margin: 0 }}>{error}</p>
+                )}
             </div>
 
             {/* Recent Reports List */}
-            {reports.length > 0 && (
+            {reports?.length > 0 && (
                 <section className='recent-reports'>
                     <h2>My Recent Interview Plans</h2>
                     <ul className='reports-list'>

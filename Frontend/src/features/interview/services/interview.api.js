@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
-
+    // empty string = same origin, so requests go through the Vite proxy in dev
+    baseURL: import.meta.env.VITE_API_URL || "",
     withCredentials: true,
 })
 
@@ -16,16 +16,14 @@ export const generateInterviewReport = async ({ jobDescription, selfDescription,
     formData.append("jobDescription", jobDescription)
     formData.append("selfDescription", selfDescription)
     if (resumeFile) {
-        formData.append("resumeFile", resumeFile)
+        // must match upload.single("resume") on the backend
+        formData.append("resume", resumeFile)
     }
-    const response = await api.post("/api/interview/", formData, {
-        headers: {
-            "Content-Type": "multipart/form-data"
-        }
-    })
+
+    // do not set Content-Type manually, the browser adds the multipart boundary
+    const response = await api.post("/api/interview/", formData)
 
     return response.data
-
 }
 
 
